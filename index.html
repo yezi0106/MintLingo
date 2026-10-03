@@ -275,7 +275,7 @@
                     <div class="flex items-center justify-between border-t border-gray-100 pt-6">
                         <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i data-lucide="target" class="text-macaron-pink"></i> 每日新词目标</h3>
                         <div class="flex items-center gap-3">
-                            <input v-model.number="settings.dailyNewWordsLimit" type="number" min="1" max="500" class="w-24 bg-gray-50 border border-gray-200 rounded-xl p-2 text-center focus:outline-none focus:ring-2 focus:ring-macaron-blue font-bold">
+                            <input v-model.number="settings.dailyNewWordsLimit" type="number" min="0" max="500" class="w-24 bg-gray-50 border border-gray-200 rounded-xl p-2 text-center focus:outline-none focus:ring-2 focus:ring-macaron-blue font-bold">
                             <span class="text-gray-500 font-medium">词 / 天</span>
                             <button @click="saveSettings().then(() => loadDashboard()).then(() => loadDueWords())" class="ml-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition font-medium text-sm">应用设置</button>
                         </div>
@@ -305,12 +305,26 @@
 
             <!-- Queue Tab -->
             <div v-show="currentTab === 'queue'" class="h-full max-w-6xl mx-auto flex flex-col pt-8">
-                <h2 class="text-2xl font-bold text-gray-800 mb-8">复习队列</h2>
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800">复习队列</h2>
+                    <div class="flex gap-4">
+                        <button v-if="selectedQueueWords.length > 0" @click="batchQuickReview" class="bg-green-500 text-white px-4 py-2 rounded-xl hover:bg-green-600 transition shadow-sm font-bold flex items-center gap-2">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> 将选中({{ selectedQueueWords.length }})标记为认识
+                        </button>
+                        <button @click="isQueueTranslationHidden = !isQueueTranslationHidden" class="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 transition shadow-sm font-medium">
+                            <span v-if="isQueueTranslationHidden" class="flex items-center gap-2"><i data-lucide="eye" class="w-4 h-4"></i> 显示释义</span>
+                            <span v-else class="flex items-center gap-2"><i data-lucide="eye-off" class="w-4 h-4"></i> 隐藏释义</span>
+                        </button>
+                    </div>
+                </div>
                 <div class="bg-white rounded-3xl card-shadow overflow-hidden flex-1 flex flex-col">
                     <div class="overflow-y-auto flex-1">
                         <table class="w-full text-left border-collapse">
                             <thead class="sticky top-0 bg-white shadow-sm z-10">
                                 <tr class="text-gray-400 border-b border-gray-100 text-sm">
+                                    <th class="py-4 font-medium px-6 w-12 text-center">
+                                        <input type="checkbox" :checked="allPendingWords.length > 0 && selectedQueueWords.length === allPendingWords.length" @change="toggleSelectAllQueueWords" class="w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-500 cursor-pointer">
+                                    </th>
                                     <th class="py-4 font-medium px-6">单词</th>
                                     <th class="py-4 font-medium px-6">释义</th>
                                     <th class="py-4 font-medium px-6">下次复习</th>
@@ -319,19 +333,32 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="word in allPendingWords" :key="word.id" class="border-b border-gray-50 hover:bg-gray-50 transition">
+                                <tr v-for="word in allPendingWords" :key="word.id" class="border-b border-gray-50 hover:bg-gray-50 transition group">
+                                    <td class="py-4 px-6 text-center">
+                                        <input type="checkbox" :value="word.id" v-model="selectedQueueWords" class="w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-500 cursor-pointer">
+                                    </td>
                                     <td class="py-4 px-6 font-bold text-gray-800">{{ word.text }}</td>
-                                    <td class="py-4 px-6 text-gray-600">{{ word.translation || '暂无释义' }}</td>
+                                    <td class="py-4 px-6 text-gray-600">
+                                        <div :class="{'blur-sm hover:blur-none transition-all duration-300 select-none cursor-pointer': isQueueTranslationHidden}">
+                                            {{ word.translation || '暂无释义' }}
+                                        </div>
+                                    </td>
                                     <td class="py-4 px-6 text-gray-500 text-sm">{{ new Date(word.nextReviewDate).toLocaleDateString('zh-CN') }}</td>
                                     <td class="py-4 px-6 text-center"><span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-bold">{{ word.totalReviews || 0 }}</span></td>
-                                    <td class="py-4 px-6 text-center">
-                                        <button @click.stop="deleteWord(word.id)" class="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="从词库中删除">
-                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    <td class="py-4 px-6 text-center flex justify-center gap-2 items-center">
+                                        <button @click.stop="quickReviewWord(word.id)" class="text-gray-400 hover:text-green-500 hover:bg-green-50 p-2 rounded-lg transition flex items-center" title="标记为认识 (直接进入下一复习周期)">
+                                            <i data-lucide="check-circle" class="w-5 h-5"></i>
+                                        </button>
+                                        <button @click.stop="removeFromQueue(word.id)" class="text-gray-300 hover:text-orange-500 hover:bg-orange-50 p-2 rounded-lg transition flex items-center" title="移出复习队列 (标记为已掌握)">
+                                            <i data-lucide="archive" class="w-5 h-5"></i>
+                                        </button>
+                                        <button @click.stop="deleteWord(word.id)" class="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition flex items-center" title="从词库中彻底删除">
+                                            <i data-lucide="trash-2" class="w-5 h-5"></i>
                                         </button>
                                     </td>
                                 </tr>
                                 <tr v-if="allPendingWords.length === 0">
-                                    <td colspan="5" class="py-12 text-center text-gray-400">队列空空如也，真棒！</td>
+                                    <td colspan="6" class="py-12 text-center text-gray-400">队列空空如也，真棒！</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -476,19 +503,27 @@
                         <div class="w-full h-full relative preserve-3d flip-card-inner" :class="{'rotate-y-180': isFlipped, 'cursor-pointer': !isFlipped}" @click="handleFlip">
                             <!-- Front of Card -->
                             <div class="absolute w-full h-full backface-hidden bg-white rounded-3xl card-shadow p-10 flex flex-col items-center justify-center text-center border border-gray-50">
+                                <div class="absolute top-6 right-6 flex gap-2">
+                                    <button @click.stop="removeFromQueue(currentWord.id)" class="text-gray-300 hover:text-orange-500 hover:bg-orange-50 p-2 rounded-lg transition" title="移出复习队列 (标记为已掌握)">
+                                        <i data-lucide="archive" class="w-5 h-5"></i>
+                                    </button>
+                                    <button @click.stop="deleteWord(currentWord.id)" class="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="从词库中彻底删除">
+                                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
                                 <div class="relative mb-6 inline-block">
-                                    <h1 @click.stop="speak(currentWord.text)" class="text-5xl font-bold text-gray-800 cursor-pointer hover:text-macaron-blue transition" title="点击发音">{{ currentWord.text }}</h1>
+                                    <h1 @click.stop="speak(currentWord.text)" class="text-5xl font-bold text-gray-800 cursor-pointer hover:text-macaron-blue transition" title="点击或按快捷键 P 发音">{{ currentWord.text }}</h1>
                                     <span v-if="currentWord.interval === 0" class="absolute -top-3 -right-12 text-[10px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded-md font-medium tracking-wide shadow-sm">新词</span>
                                     <span v-else class="absolute -top-3 -right-12 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md font-medium tracking-wide shadow-sm">复习</span>
                                 </div>
-                                <p class="text-lg text-gray-500 mb-2">
+                                <p v-if="currentWord.pos || currentWord.phonetic" class="text-lg text-gray-500 mb-2">
                                     <span v-if="currentWord.pos" class="font-bold text-gray-600 mr-2">{{ currentWord.pos }}</span>
-                                    [{{ currentWord.phonetic }}]
+                                    <span v-if="currentWord.phonetic">[{{ currentWord.phonetic }}]</span>
                                 </p>
                                 <div v-if="currentWord.context" class="mt-8 px-6 py-4 bg-gray-50 rounded-2xl w-full">
                                     <p class="text-gray-600 text-lg italic">" {{ currentWord.context }} "</p>
                                 </div>
-                                <p v-if="!isFlipped" class="absolute bottom-8 text-sm text-gray-400 animate-pulse">点击空白处翻转卡片</p>
+                                <p v-if="!isFlipped" class="absolute bottom-8 text-sm text-gray-400 animate-pulse">点击空白处或按 [空格键] 翻转卡片</p>
                             </div>
                             
                             <!-- Back of Card -->
@@ -505,12 +540,20 @@
                                             {{ currentWord.phonetic }}
                                         </p>
                                     </div>
-                                    <button @click.stop="speak(currentWord.text)" class="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition">
-                                        <i data-lucide="volume-2"></i>
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button @click.stop="removeFromQueue(currentWord.id)" class="p-3 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition" title="移出复习队列 (标记为已掌握)">
+                                            <i data-lucide="archive"></i>
+                                        </button>
+                                        <button @click.stop="deleteWord(currentWord.id)" class="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition" title="从词库中彻底删除">
+                                            <i data-lucide="trash-2"></i>
+                                        </button>
+                                        <button @click.stop="speak(currentWord.text)" class="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition">
+                                            <i data-lucide="volume-2"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 
-                                <div class="space-y-6 flex-1 overflow-y-auto pr-2 pb-4">
+                                <div ref="cardBackScrollRef" class="space-y-6 flex-1 overflow-y-auto pr-2 pb-4">
                                     <div>
                                         <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">基础释义</h3>
                                         <p class="text-xl text-gray-800">{{ currentWord.translation }}</p>
@@ -615,10 +658,10 @@
                                 
                                 <!-- SM-2 Evaluation Buttons -->
                                 <div class="grid grid-cols-4 gap-4 mt-6 pt-4">
-                                    <button @click.stop="processWord(0)" class="py-4 border-2 border-blue-100 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition shadow-sm">忘记</button>
-                                    <button @click.stop="processWord(3)" class="py-4 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-100 transition shadow-sm">模糊</button>
-                                    <button @click.stop="processWord(4)" class="py-4 bg-blue-100 text-blue-700 rounded-xl font-bold hover:bg-blue-200 transition shadow-sm">熟悉</button>
-                                    <button @click.stop="processWord(5)" class="py-4 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-900 transition shadow-sm">认识</button>
+                                    <button @click.stop="processWord(0)" class="py-4 border-2 border-blue-100 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition shadow-sm">忘记 (1)</button>
+                                    <button @click.stop="processWord(3)" class="py-4 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-100 transition shadow-sm">模糊 (2)</button>
+                                    <button @click.stop="processWord(4)" class="py-4 bg-blue-100 text-blue-700 rounded-xl font-bold hover:bg-blue-200 transition shadow-sm">熟悉 (3)</button>
+                                    <button @click.stop="processWord(5)" class="py-4 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-900 transition shadow-sm">认识 (4/空格)</button>
                                 </div>
                             </div>
                         </div>
@@ -710,7 +753,7 @@
                                         <p class="font-bold text-gray-800 text-lg">{{ kw.word }}</p>
                                         <p class="text-sm text-gray-500 mt-1">{{ kw.translation }}</p>
                                     </div>
-                                    <button @click="addToWords(kw.word, kw.translation, '', '', 'Scenarios Context: ' + kw.word, scenarioTargetWordbookId)" 
+                                    <button @click="addToWords(kw.word, kw.translation, '', '', '', scenarioTargetWordbookId)" 
                                             class="text-gray-300 group-hover:text-macaron-mint p-3 rounded-xl group-hover:bg-green-50 transition">
                                         <i data-lucide="plus-circle" class="w-6 h-6"></i>
                                     </button>
@@ -873,7 +916,7 @@
                         <div class="grid md:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-sm font-medium text-gray-600 mb-2">每日新词目标</label>
-                                <input v-model.number="settings.dailyNewWordsLimit" type="number" min="1" max="500" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-macaron-blue">
+                                <input v-model.number="settings.dailyNewWordsLimit" type="number" min="0" max="500" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-macaron-blue">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-600 mb-2">新词背诵顺序</label>
@@ -895,6 +938,16 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-600 mb-2">例句扩写使用场景</label>
                                 <input v-model="settings.expansionField" type="text" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-macaron-blue" placeholder="如: 雅思口语对话、学术论文段落">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600 mb-2">自动发音 (进入新单词时)</label>
+                                <div class="flex items-center h-[50px]">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="settings.autoPronounce" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-macaron-blue"></div>
+                                        <span class="ml-3 text-sm font-medium text-gray-600">开启自动发音</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
@@ -1064,6 +1117,8 @@
             setup() {
                 // UI State
                                 const currentTab = ref('plan');
+                const selectedQueueWords = ref([]);
+                const isQueueTranslationHidden = ref(false);
                 const tabs = [
                     { id: 'dashboard', name: '学习统计', icon: 'layout-dashboard' },
                     { id: 'plan', name: '今日计划', icon: 'calendar-check' },
@@ -1093,7 +1148,8 @@
                     customThemes: [],
                     planStartDate: '',
                     planBaseStudied: 0,
-                    isPlanInitialized: false
+                    isPlanInitialized: false,
+                    autoPronounce: false
                 });
                 
                 let oldDailyLimit = 20;
@@ -1571,10 +1627,20 @@
                 const isFlipped = ref(false);
                 const showProfExplanation = ref(false);
                 const isGeneratingProf = ref(false);
+                const cardBackScrollRef = ref(null);
+
+                const resetCardScroll = () => {
+                    nextTick(() => {
+                        if (cardBackScrollRef.value) {
+                            cardBackScrollRef.value.scrollTop = 0;
+                        }
+                    });
+                };
 
                 const handleFlip = () => {
                     if (!isFlipped.value) {
                         isFlipped.value = true;
+                        resetCardScroll();
                     }
                 };
 
@@ -1583,7 +1649,7 @@
                     isGeneratingProf.value = true;
                     try {
                         const field = settings.profField || '通用日常英语';
-                        const sysPrompt = `你是一名精通【${field}】的专家。请针对该领域，对单词 "${currentWord.value.text}" 给出详尽、深度的专业释义和用法解析（建议不少于100字，包含专业语境用法、搭配及注意事项）。请强制以 JSON 格式返回分析结果:
+                        const sysPrompt = `你是一名精通【${field}】的专家。请针对该领域，对用户提供的目标单词给出详尽、深度的专业释义和用法解析（建议不少于100字，包含专业语境用法、搭配及注意事项）。请强制以 JSON 格式返回分析结果:
 {
   "translation": "该领域下的单词基础中文释义（如原词条无基础释义则提供，否则原样保留或补充）",
   "phonetic": "音标（如 /'æpl/，如无需可留空）",
@@ -1620,7 +1686,7 @@
                     isGeneratingExamples.value = true;
                     try {
                         const field = settings.exampleField || '通用日常英语';
-                        const sysPrompt = `你是一个专业的英语助教。请针对单词 "${currentWord.value.text}" 在【${field}】场景下的用法，生成两个全新的英文例句及中文翻译。请强制以 JSON 格式返回:
+                        const sysPrompt = `你是一个专业的英语助教。请针对用户提供的目标单词，在【${field}】场景下的用法，生成两个全新的英文例句及中文翻译。请强制以 JSON 格式返回:
 {
   "example1": "第一个全新英文例句",
   "example1_zh": "第一个例句的中文翻译",
@@ -1659,13 +1725,12 @@
                 const loadDueWords = async () => {
                     const endOfToday = new Date(new Date().setHours(23, 59, 59, 999)).getTime();
                     let allDue = await db.words.where('nextReviewDate').belowOrEqual(endOfToday).toArray();
-                    
-                    if (activeWordbookId.value !== 'all') {
-                        allDue = allDue.filter(w => w.wordbookId === activeWordbookId.value || (activeWordbookId.value === 'default' && !w.wordbookId));
-                    }
-                    
                     const reviewWords = allDue.filter(w => w.interval > 0);
                     let newWords = allDue.filter(w => w.interval === 0);
+                    
+                    if (activeWordbookId.value !== 'all') {
+                        newWords = newWords.filter(w => w.wordbookId === activeWordbookId.value || (activeWordbookId.value === 'default' && !w.wordbookId));
+                    }
                     
                     if (settings.studyOrder === 'az') {
                         newWords.sort((a,b) => a.text.localeCompare(b.text));
@@ -1682,7 +1747,7 @@
                     
                     totalRemainingNew.value = newWords.length;
                     
-                    // Respect daily limit for new words (cumulative carry-over logic)
+                    // Respect daily limit for new words (non-cumulative logic)
                     const todayStr = new Date().toISOString().split('T')[0];
                     if (!settings.planStartDate || !settings.isPlanInitialized || settings.expectedTotal === undefined) {
                         settings.planStartDate = todayStr;
@@ -1691,21 +1756,15 @@
                         settings.expectedTotal = settings.dailyNewWordsLimit;
                         settings.isPlanInitialized = true;
                         await saveSettings();
-                    } else {
-                        const d1 = new Date(todayStr).getTime();
-                        const d2 = new Date(settings.lastUpdatedDate || settings.planStartDate).getTime();
-                        const daysPassed = Math.max(0, Math.floor((d1 - d2) / 86400000));
-                        if (daysPassed > 0) {
-                            settings.expectedTotal = (settings.expectedTotal || 0) + (daysPassed * settings.dailyNewWordsLimit);
-                            settings.lastUpdatedDate = todayStr;
-                            await saveSettings();
-                        }
+                    } else if (settings.lastUpdatedDate !== todayStr) {
+                        settings.lastUpdatedDate = todayStr;
+                        await saveSettings();
                     }
                     
-                    const totalStudiedGlobally = await db.words.filter(w => !!w.firstStudiedAt).count();
-                    const actualSinceStart = await db.words.filter(w => !!w.firstStudiedAt && w.firstStudiedAt >= new Date(settings.planStartDate).getTime()).count();
+                    const startOfToday = new Date(todayStr).getTime();
+                    const actualToday = await db.words.filter(w => !!w.firstStudiedAt && w.firstStudiedAt >= startOfToday).count();
                     
-                    const remainingNew = Math.max(0, settings.expectedTotal - actualSinceStart);
+                    const remainingNew = Math.max(0, settings.dailyNewWordsLimit - actualToday);
                     
                     newWords = newWords.slice(0, remainingNew);
                     
@@ -1714,41 +1773,70 @@
                     isFlipped.value = false;
                     showProfExplanation.value = false;
                     audioUrl.value = null;
-                    if (currentWord.value) preloadExample(currentWord.value);
+                    triggerPreload();
                 };
 
                 const isPreloadingExample = ref(false);
                 const preloadExample = async (wordObj) => {
                     if (!wordObj || (wordObj.example1 && wordObj.example2) || wordObj.context) return;
-                    isPreloadingExample.value = true;
+                    if (wordObj.isPreloading) return;
+                    wordObj.isPreloading = true;
+                    
+                    if (currentWord.value && currentWord.value.id === wordObj.id) {
+                        isPreloadingExample.value = true;
+                    }
+                    
                     const wordText = wordObj.text;
                     const field = settings.exampleField || '通用日常英语';
-                    const sysPrompt = `你是一名精通【${field}】的英语专家。请结合该领域的语境，给出一个包含单词 "${wordText}" 的两个高质量英文例句。要求句子严格符合【${field}】的语言风格（若是学术领域则要求深度和复杂句法，若是影视/日常则要求地道自然），并提供对应中文翻译。返回严格 JSON 格式: {"example1": "第一句英文例句", "example1_zh": "第一句中文翻译", "example2": "第二句英文例句", "example2_zh": "第二句中文翻译"}`;
+                    const sysPrompt = `你是一名精通【${field}】的英语专家。请结合该领域的语境，给出一个包含用户提供单词的两个高质量英文例句。要求句子严格符合【${field}】的语言风格（若是学术领域则要求深度和复杂句法，若是影视/日常则要求地道自然），并提供对应中文翻译。返回严格 JSON 格式: {"example1": "第一句英文例句", "example1_zh": "第一句中文翻译", "example2": "第二句英文例句", "example2_zh": "第二句中文翻译"}`;
                     const usrPrompt = `单词: ${wordText}`;
-                    const res = await callLLM(sysPrompt, usrPrompt);
-                    if (res && res.example1) {
-                        if (currentWord.value && currentWord.value.id === wordObj.id) {
-                            currentWord.value.example1 = currentWord.value.example1 || res.example1;
-                            currentWord.value.example1_zh = currentWord.value.example1_zh || res.example1_zh;
-                            currentWord.value.example2 = currentWord.value.example2 || res.example2;
-                            currentWord.value.example2_zh = currentWord.value.example2_zh || res.example2_zh;
+                    try {
+                        const res = await callLLM(sysPrompt, usrPrompt);
+                        if (res && res.example1) {
+                            if (currentWord.value && currentWord.value.id === wordObj.id) {
+                                currentWord.value.example1 = currentWord.value.example1 || res.example1;
+                                currentWord.value.example1_zh = currentWord.value.example1_zh || res.example1_zh;
+                                currentWord.value.example2 = currentWord.value.example2 || res.example2;
+                                currentWord.value.example2_zh = currentWord.value.example2_zh || res.example2_zh;
+                            }
+                            wordObj.example1 = wordObj.example1 || res.example1;
+                            wordObj.example1_zh = wordObj.example1_zh || res.example1_zh;
+                            wordObj.example2 = wordObj.example2 || res.example2;
+                            wordObj.example2_zh = wordObj.example2_zh || res.example2_zh;
+                            
+                            await db.words.update(wordObj.id, { 
+                                example1: wordObj.example1, 
+                                example1_zh: wordObj.example1_zh,
+                                example2: wordObj.example2, 
+                                example2_zh: wordObj.example2_zh 
+                            });
                         }
-                        await db.words.update(wordObj.id, { 
-                            example1: wordObj.example1 || res.example1, 
-                            example1_zh: wordObj.example1_zh || res.example1_zh,
-                            example2: wordObj.example2 || res.example2, 
-                            example2_zh: wordObj.example2_zh || res.example2_zh 
-                        });
+                    } catch (e) {
+                        console.error("Preload error:", e);
+                    } finally {
+                        wordObj.isPreloading = false;
+                        if (currentWord.value && currentWord.value.id === wordObj.id) {
+                            isPreloadingExample.value = false;
+                        }
                     }
-                    isPreloadingExample.value = false;
+                };
+
+                const triggerPreload = () => {
+                    if (currentWord.value) {
+                        isPreloadingExample.value = !!currentWord.value.isPreloading;
+                    } else {
+                        isPreloadingExample.value = false;
+                    }
+                    const count = Math.min(3, dueWords.value.length);
+                    for (let i = 0; i < count; i++) {
+                        preloadExample(dueWords.value[i]);
+                    }
                 };
 
                 const loadQueueWords = async () => {
                     let allWords = await db.words.toArray();
-                    if (activeWordbookId.value !== 'all') {
-                        allWords = allWords.filter(w => w.wordbookId === activeWordbookId.value || (activeWordbookId.value === 'default' && !w.wordbookId));
-                    }
                     allPendingWords.value = allWords.filter(w => w.interval > 0).sort((a,b) => a.nextReviewDate - b.nextReviewDate);
+                    nextTick(() => { lucide.createIcons(); });
                 };
 
                 const loadWordbooks = async () => {
@@ -1771,12 +1859,93 @@
                 };
 
                 const deleteWord = async (id) => {
-                    if (confirm('确定要删除这个单词吗？')) {
+                    if (confirm('确定要彻底从词书中删除这个单词吗？')) {
                         await db.words.delete(id);
                         await loadDueWords();
                         await loadDashboard();
-                        showToast('单词已删除');
+                        if (currentTab.value === 'queue') await loadQueueWords();
+                        showToast('单词已从词书中彻底删除');
                     }
+                };
+
+                const removeFromQueue = async (id) => {
+                    if (confirm('确定要将该单词移出复习队列吗？（它将被标记为已掌握，以后不再出现，但仍保留在词书中）')) {
+                        const w = await db.words.get(id);
+                        if (w) {
+                            w.interval = -1;
+                            await db.words.put(w);
+                            await loadQueueWords();
+                            await loadDueWords();
+                            await loadDashboard();
+                            showToast('已移出复习队列');
+                        }
+                    }
+                };
+
+                const toggleSelectAllQueueWords = () => {
+                    if (selectedQueueWords.value.length === allPendingWords.value.length && allPendingWords.value.length > 0) {
+                        selectedQueueWords.value = [];
+                    } else {
+                        selectedQueueWords.value = allPendingWords.value.map(w => w.id);
+                    }
+                };
+
+                const quickReviewWord = async (id) => {
+                    const w = await db.words.get(id);
+                    if (!w) return;
+                    let { interval, repetition, efactor, firstStudiedAt, totalReviews } = w;
+                    if (firstStudiedAt) totalReviews = (totalReviews || 0) + 1;
+                    else { totalReviews = 0; firstStudiedAt = Date.now(); }
+                    
+                    if (repetition === 0) interval = 2;
+                    else if (repetition === 1) interval = 6;
+                    else interval = Math.round(interval * efactor);
+                    repetition += 1;
+                    
+                    efactor = Math.max(1.3, efactor);
+                    const nextReviewDate = Date.now() + interval * 86400000;
+                    await db.words.update(id, { interval, repetition, efactor, nextReviewDate, firstStudiedAt, totalReviews });
+                    
+                    const today = new Date().toISOString().split('T')[0];
+                    const log = await db.logs.get(today);
+                    await db.logs.put({ date: today, count: log ? log.count + 1 : 1 });
+
+                    await loadQueueWords();
+                    await loadDueWords();
+                    await loadDashboard();
+                    showToast('已标记为认识');
+                };
+
+                const batchQuickReview = async () => {
+                    if (selectedQueueWords.value.length === 0) return;
+                    if (!confirm(`确定将选中的 ${selectedQueueWords.value.length} 个单词标记为认识吗？`)) return;
+                    
+                    const today = new Date().toISOString().split('T')[0];
+                    let log = await db.logs.get(today);
+                    let currentCount = log ? log.count : 0;
+
+                    for (const id of selectedQueueWords.value) {
+                        const w = await db.words.get(id);
+                        if (!w) continue;
+                        let { interval, repetition, efactor, firstStudiedAt, totalReviews } = w;
+                        if (firstStudiedAt) totalReviews = (totalReviews || 0) + 1;
+                        else { totalReviews = 0; firstStudiedAt = Date.now(); }
+                        if (repetition === 0) interval = 2;
+                        else if (repetition === 1) interval = 6;
+                        else interval = Math.round(interval * efactor);
+                        repetition += 1;
+                        efactor = Math.max(1.3, efactor);
+                        const nextReviewDate = Date.now() + interval * 86400000;
+                        await db.words.update(id, { interval, repetition, efactor, nextReviewDate, firstStudiedAt, totalReviews });
+                        currentCount++;
+                    }
+                    
+                    await db.logs.put({ date: today, count: currentCount });
+                    selectedQueueWords.value = [];
+                    await loadQueueWords();
+                    await loadDueWords();
+                    await loadDashboard();
+                    showToast('批量标记完成');
                 };
 
                 const recordStudyLog = async () => {
@@ -1786,6 +1955,7 @@
                 };
 
                 const processWord = async (quality) => {
+                    document.activeElement?.blur();
                     if (!currentWord.value) return;
                     let { interval, repetition, efactor, firstStudiedAt, totalReviews } = currentWord.value;
                     
@@ -1837,7 +2007,7 @@
                     isFlipped.value = false;
                     showProfExplanation.value = false;
                     audioUrl.value = null;
-                    if (currentWord.value) preloadExample(currentWord.value);
+                    triggerPreload();
                 };
 
                 const addToWords = async (text, translation, phonetic, explanation, context, targetWbId = null) => {
@@ -2187,17 +2357,25 @@
                     const cfg = await db.settings.get('config_v2');
                     if(cfg) {
                         settings.apiUrl = cfg.apiUrl || settings.apiUrl;
-                        settings.apiKey = cfg.apiKey || settings.apiKey;
+                        settings.apiKey = cfg.apiKey !== undefined ? cfg.apiKey : settings.apiKey;
                         settings.apiModel = cfg.apiModel || settings.apiModel;
-                        settings.dailyNewWordsLimit = cfg.dailyNewWordsLimit || settings.dailyNewWordsLimit;
+                        settings.dailyNewWordsLimit = cfg.dailyNewWordsLimit !== undefined ? cfg.dailyNewWordsLimit : settings.dailyNewWordsLimit;
                         oldDailyLimit = settings.dailyNewWordsLimit;
                         settings.studyOrder = cfg.studyOrder || settings.studyOrder;
                         settings.pronunciationAccent = cfg.pronunciationAccent || settings.pronunciationAccent;
                         settings.profField = cfg.profField || settings.profField;
                         settings.exampleField = cfg.exampleField || settings.exampleField;
+                        settings.expansionField = cfg.expansionField || settings.expansionField;
                         settings.ttsEngine = cfg.ttsEngine || settings.ttsEngine;
+                        settings.ttsSpeed = cfg.ttsSpeed || settings.ttsSpeed;
                         settings.theme = cfg.theme || settings.theme;
                         settings.customThemes = cfg.customThemes || [];
+                        if (cfg.planStartDate !== undefined) settings.planStartDate = cfg.planStartDate;
+                        if (cfg.planBaseStudied !== undefined) settings.planBaseStudied = cfg.planBaseStudied;
+                        if (cfg.isPlanInitialized !== undefined) settings.isPlanInitialized = cfg.isPlanInitialized;
+                        if (cfg.expectedTotal !== undefined) settings.expectedTotal = cfg.expectedTotal;
+                        if (cfg.lastUpdatedDate !== undefined) settings.lastUpdatedDate = cfg.lastUpdatedDate;
+                        settings.autoPronounce = cfg.autoPronounce !== undefined ? cfg.autoPronounce : settings.autoPronounce;
                         if (cfg.activeWordbookId) activeWordbookId.value = cfg.activeWordbookId;
                         applyTheme(settings.theme);
                     }
@@ -2546,6 +2724,16 @@
 
                 onMounted(async () => {
                     await loadSettings();
+                    
+                    // Cleanup corrupted context from old AI Scenario bug
+                    try {
+                        const badWords = await db.words.filter(w => w.context && w.context.startsWith('Scenarios Context: ')).toArray();
+                        for (let bw of badWords) {
+                            bw.context = '';
+                            await db.words.put(bw);
+                        }
+                    } catch(e) {}
+
                     await loadWordbooks();
                     await loadBooks();
                     await loadDueWords();
@@ -2573,6 +2761,27 @@
                             showFloatAdd.value = false;
                         }
                     });
+
+                    window.addEventListener('keydown', (e) => {
+                        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+                        if (currentTab.value !== 'words' || !currentWord.value) return;
+
+                        if (e.code === 'Space' || e.code === 'Enter') {
+                            e.preventDefault();
+                            if (!isFlipped.value) handleFlip();
+                            else processWord(5);
+                        } else if (e.code === 'Digit1' && isFlipped.value) {
+                            processWord(0);
+                        } else if (e.code === 'Digit2' && isFlipped.value) {
+                            processWord(3);
+                        } else if (e.code === 'Digit3' && isFlipped.value) {
+                            processWord(4);
+                        } else if (e.code === 'Digit4' && isFlipped.value) {
+                            processWord(5);
+                        } else if (e.code === 'KeyP') {
+                            speak(currentWord.value.text);
+                        }
+                    });
                 });
 
                 watch(currentTab, async (val) => {
@@ -2596,13 +2805,26 @@
                         }, 100);
                     } else if (val === 'queue') {
                         loadQueueWords();
+                    } else if (val === 'words') {
+                        if (currentWord.value && settings.autoPronounce) {
+                            setTimeout(() => speak(currentWord.value.text), 300);
+                        }
+                    }
+                });
+
+                watch(currentWord, (newWord) => {
+                    resetCardScroll();
+                    if (newWord && settings.autoPronounce && currentTab.value === 'words') {
+                        setTimeout(() => speak(newWord.text), 300);
                     }
                 });
 
                 app.updated = () => { lucide.createIcons(); };
 
                 return {
-                    toastMsg, showToast, activeWordbookId, wordbooks, wordbookCounts, newWordbookName, allPendingWords, deleteWordbook, deleteWord,
+                    selectedQueueWords, isQueueTranslationHidden, toggleSelectAllQueueWords, quickReviewWord, batchQuickReview,
+                    cardBackScrollRef,
+                    toastMsg, showToast, activeWordbookId, wordbooks, wordbookCounts, newWordbookName, allPendingWords, deleteWordbook, deleteWord, removeFromQueue,
                     loadDashboard,
                     currentTab, tabs,
                     settings, saveSettings, exportData, importData, importLibrary, createEmptyWordbook, clearWords, resetProgress, resetSettings,

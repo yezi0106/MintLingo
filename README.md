@@ -62,12 +62,11 @@ MintLingo 共包含 8 大核心功能模块，满足从词库建立、计划执�
 
 ### 8. 系统设置 (Settings)
 - **API 接口配置**：自由填入你自己的大模型 API 地址和 Key（如 OpenAI 或 DeepSeek），保障 AI 辅助功能顺畅运行。
-<img width="1497" height="743" alt="image" src="https://github.com/user-attachments/assets/9479030e-0000-4be9-86cc-f584a6961a3c" />
 - **自定义主题**：自由更换界面、按钮与卡片的主题色（如马卡龙色系）。
-<img width="1497" height="745" alt="image" src="https://github.com/user-attachments/assets/5534e510-a7df-4a9a-a91a-36febf5e06f8" />
+- **数据安全堡垒**：提供一键导出全库数据（JSON格式本地备份），无惧浏览器缓存清理；支持换机后一键恢复。
+<img width="1497" height="743" alt="image" src="https://github.com/user-attachments/assets/9479030e-0000-4be9-86cc-f584a6961a3c" />
 <img width="1493" height="739" alt="image" src="https://github.com/user-attachments/assets/0789577b-609d-4b61-9aa3-b2c0d836a12d" />
 <img width="1507" height="753" alt="image" src="https://github.com/user-attachments/assets/3f4beebc-af7d-4130-b34e-d59e65d613ec" />
-- **数据安全堡垒**：提供一键导出全库数据（JSON格式本地备份），无惧浏览器缓存清理；支持换机后一键恢复。
 <img width="745" height="385" alt="image" src="https://github.com/user-attachments/assets/fc252787-52b3-41f0-9148-2fca543f2473" />
 
 

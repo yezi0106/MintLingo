@@ -941,13 +941,12 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-600 mb-2">自动发音 (进入新单词时)</label>
-                                <div class="flex items-center h-[50px]">
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" v-model="settings.autoPronounce" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-macaron-blue"></div>
-                                        <span class="ml-3 text-sm font-medium text-gray-600">开启自动发音</span>
-                                    </label>
-                                </div>
+                                <select v-model="settings.autoPronounceMode" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-macaron-blue cursor-pointer text-gray-700">
+                                    <option value="none">关闭自动发音</option>
+                                    <option value="word">仅朗读单词</option>
+                                    <option value="example">仅朗读例句</option>
+                                    <option value="both">连续朗读单词和例句</option>
+                                </select>
                             </div>
                         </div>
 
@@ -1149,7 +1148,7 @@
                     planStartDate: '',
                     planBaseStudied: 0,
                     isPlanInitialized: false,
-                    autoPronounce: false
+                    autoPronounceMode: 'none'
                 });
                 
                 let oldDailyLimit = 20;
@@ -1571,6 +1570,28 @@
                     }
                     
                     playNextInQueue();
+                };
+
+                const doAutoPronounce = (word) => {
+                    if (!word || settings.autoPronounceMode === 'none') return;
+                    let text = '';
+                    
+                    const examples = [];
+                    if (word.context) examples.push(word.context);
+                    if (word.example1 && word.example1 !== word.context) examples.push(word.example1);
+                    if (word.example2) examples.push(word.example2);
+                    const exStr = examples.join('. ');
+
+                    if (settings.autoPronounceMode === 'word') {
+                        text = word.text;
+                    } else if (settings.autoPronounceMode === 'example') {
+                        text = exStr ? exStr : word.text;
+                    } else if (settings.autoPronounceMode === 'both') {
+                        text = word.text + (exStr ? '. ' + exStr : '');
+                    }
+                    if (text) {
+                        setTimeout(() => speak(text), 300);
+                    }
                 };
 
                 // --- MediaRecorder (Shadowing) ---
@@ -2375,7 +2396,11 @@
                         if (cfg.isPlanInitialized !== undefined) settings.isPlanInitialized = cfg.isPlanInitialized;
                         if (cfg.expectedTotal !== undefined) settings.expectedTotal = cfg.expectedTotal;
                         if (cfg.lastUpdatedDate !== undefined) settings.lastUpdatedDate = cfg.lastUpdatedDate;
-                        settings.autoPronounce = cfg.autoPronounce !== undefined ? cfg.autoPronounce : settings.autoPronounce;
+                        if (cfg.autoPronounceMode !== undefined) {
+                            settings.autoPronounceMode = cfg.autoPronounceMode;
+                        } else if (cfg.autoPronounce !== undefined) {
+                            settings.autoPronounceMode = cfg.autoPronounce ? 'word' : 'none';
+                        }
                         if (cfg.activeWordbookId) activeWordbookId.value = cfg.activeWordbookId;
                         applyTheme(settings.theme);
                     }
@@ -2806,16 +2831,16 @@
                     } else if (val === 'queue') {
                         loadQueueWords();
                     } else if (val === 'words') {
-                        if (currentWord.value && settings.autoPronounce) {
-                            setTimeout(() => speak(currentWord.value.text), 300);
+                        if (currentWord.value) {
+                            doAutoPronounce(currentWord.value);
                         }
                     }
                 });
 
                 watch(currentWord, (newWord) => {
                     resetCardScroll();
-                    if (newWord && settings.autoPronounce && currentTab.value === 'words') {
-                        setTimeout(() => speak(newWord.text), 300);
+                    if (newWord && currentTab.value === 'words') {
+                        doAutoPronounce(newWord);
                     }
                 });
 

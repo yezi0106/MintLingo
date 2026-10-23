@@ -1572,25 +1572,38 @@
                     playNextInQueue();
                 };
 
-                const doAutoPronounce = (word) => {
-                    if (!word || settings.autoPronounceMode === 'none') return;
-                    let text = '';
-                    
+                const getPronounceText = (word, fallbackToWord = true) => {
+                    if (!word) return '';
                     const examples = [];
                     if (word.context) examples.push(word.context);
                     if (word.example1 && word.example1 !== word.context) examples.push(word.example1);
                     if (word.example2) examples.push(word.example2);
                     const exStr = examples.join('. ');
 
-                    if (settings.autoPronounceMode === 'word') {
-                        text = word.text;
-                    } else if (settings.autoPronounceMode === 'example') {
-                        text = exStr ? exStr : word.text;
-                    } else if (settings.autoPronounceMode === 'both') {
-                        text = word.text + (exStr ? '. ' + exStr : '');
+                    const mode = settings.autoPronounceMode;
+                    if (mode === 'word') {
+                        return word.text;
+                    } else if (mode === 'example') {
+                        return exStr ? exStr : word.text;
+                    } else if (mode === 'both') {
+                        return word.text + (exStr ? '. ' + exStr : '');
                     }
+                    return fallbackToWord ? word.text : '';
+                };
+
+                const doAutoPronounce = (word) => {
+                    if (!word || settings.autoPronounceMode === 'none') return;
+                    const text = getPronounceText(word, false);
                     if (text) {
                         setTimeout(() => speak(text), 300);
+                    }
+                };
+
+                const pronounceCurrentWordBySettings = () => {
+                    if (!currentWord.value) return;
+                    const text = getPronounceText(currentWord.value, true);
+                    if (text) {
+                        speak(text);
                     }
                 };
 
@@ -2804,7 +2817,7 @@
                         } else if (e.code === 'Digit4' && isFlipped.value) {
                             processWord(5);
                         } else if (e.code === 'KeyP') {
-                            speak(currentWord.value.text);
+                            pronounceCurrentWordBySettings();
                         }
                     });
                 });
